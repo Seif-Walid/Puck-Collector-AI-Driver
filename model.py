@@ -1,6 +1,7 @@
 from ultralytics import YOLO
 import cv2
 import numpy as np
+from camera import Camera
 
 
 class PuckDetector:
@@ -12,7 +13,6 @@ class PuckDetector:
             model_path (str): The file path to your custom-trained YOLOv8n model weights (.pt file).
         """
         try:
-            # Load the custom-trained YOLOv8 model
             self.model = YOLO(model_path)
             print("PuckDetector initialized successfully.")
         except Exception as e:
@@ -27,16 +27,31 @@ class PuckDetector:
             image (np.ndarray): The input image as a NumPy array (e.g., from OpenCV).
 
         Returns:
-            list: A list of detection results, where each result contains
-                  bounding box coordinates, confidence scores, and class labels.
+            list: A list of detection results.
         """
         if self.model is None:
             print("Model is not loaded. Cannot perform detection.")
             return []
 
-        # Perform inference on the image
         results = self.model(image)
         return results
+
+    def capture_and_detect(self, camera: Camera):
+        """
+        Captures a photo from the camera and performs puck detection.
+
+        Args:
+            camera (Camera): An instance of the Camera class.
+
+        Returns:
+            tuple: A tuple containing the raw frame and the detection results, or (None, None) on failure.
+        """
+        frame = camera.read_frame()
+        if frame is None:
+            return None, None
+
+        results = self.detect_pucks(frame)
+        return frame, results
 
     def draw_detections(self, image: np.ndarray, results: list):
         """
@@ -52,7 +67,6 @@ class PuckDetector:
         if not results:
             return image
 
-        # The ultralytics results object has a built-in plotting function
         annotated_image = results[0].plot()
         return annotated_image
 
@@ -64,8 +78,7 @@ class PuckDetector:
             results (list): The list of detection results from detect_pucks().
 
         Returns:
-            dict: A dictionary with keys 'blue_pucks' and 'red_pucks', each
-                containing a list of (x, y) coordinates for the puck centers.
+            dict: A dictionary with keys 'blue_pucks' and 'red_pucks'.
         """
         puck_centers = {
             'blue_pucks': [],

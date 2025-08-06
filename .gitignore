@@ -2,3 +2,4 @@ models/
 Pipfile
 Pipfile.lock
 puck_images_resized
+__pycache__/
