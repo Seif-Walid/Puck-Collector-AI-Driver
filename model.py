@@ -102,3 +102,46 @@ class PuckDetector:
                 puck_centers['red_pucks'].append((center_x, center_y))
 
         return puck_centers
+
+    def live_demo(self, camera: Camera, delay: int = 10):
+        """
+        Captures photos continuously from a camera, performs detection,
+        and displays the results in a live window.
+        Press 'q' to exit the live demo.
+
+        Args:
+            camera (Camera): An instance of the Camera class.
+            delay (int): The delay in milliseconds between each frame capture.
+        """
+        try:
+            while True:
+                frame = camera.read_frame()
+                if frame is None:
+                    break
+
+                results = self.detect_pucks(frame)
+                puck_centers = self.get_puck_centers(results)
+
+                # Annotate image with bounding boxes and puck centers
+                annotated_image = self.draw_detections(frame, results)
+                for x, y in puck_centers['blue_pucks']:
+                    cv2.circle(annotated_image, (x, y), 5, (255, 0, 0), -1)
+                for x, y in puck_centers['red_pucks']:
+                    cv2.circle(annotated_image, (x, y), 5, (0, 0, 255), -1)
+
+                # Print summary to console
+                print(
+                    f"Blue pucks: {puck_centers['blue_pucks']} | Red pucks: {puck_centers['red_pucks']}")
+
+                # Display the annotated image
+                cv2.imshow("Puck Detector Live Demo", annotated_image)
+
+                # Wait for key press; 'q' will break the loop
+                if cv2.waitKey(delay) & 0xFF == ord('q'):
+                    break
+
+        except Exception as e:
+            print(f"An error occurred during the live demo: {e}")
+        finally:
+            cv2.destroyAllWindows()
+            camera.release()
