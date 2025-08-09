@@ -4,24 +4,28 @@ import numpy as np
 from camera import Camera
 
 
-class PuckDetector:
+class ObjectDetector:
+    """
+    A class for detecting various objects (pucks and bases) using a YOLOv8 model.
+    """
+
     def __init__(self, model_path='models/best.pt'):
         """
-        Initializes the PuckDetector with a YOLOv8 model.
+        Initializes the ObjectDetector with a YOLOv8 model.
 
         Args:
             model_path (str): The file path to your custom-trained YOLOv8n model weights (.pt file).
         """
         try:
             self.model = YOLO(model_path)
-            print("PuckDetector initialized successfully.")
+            print("ObjectDetector initialized successfully.")
         except Exception as e:
             print(f"Error loading the YOLO model from {model_path}: {e}")
             self.model = None
 
-    def detect_pucks(self, image: np.ndarray):
+    def detect_objects(self, image: np.ndarray):
         """
-        Performs inference on an image to detect pucks.
+        Performs inference on an image to detect all specified objects.
 
         Args:
             image (np.ndarray): The input image as a NumPy array (e.g., from OpenCV).
@@ -38,7 +42,7 @@ class PuckDetector:
 
     def capture_and_detect(self, camera: Camera):
         """
-        Captures a photo from the camera and performs puck detection.
+        Captures a photo from the camera and performs object detection.
 
         Args:
             camera (Camera): An instance of the Camera class.
@@ -50,43 +54,29 @@ class PuckDetector:
         if frame is None:
             return None, None
 
-        results = self.detect_pucks(frame)
+        results = self.detect_objects(frame)
         return frame, results
 
-    def draw_detections(self, image: np.ndarray, results: list):
+    def get_object_info(self, results: list):
         """
-        Draws the detected bounding boxes and labels on the image.
+        Extracts information (class, center, and bounding box) for all detected objects.
 
         Args:
-            image (np.ndarray): The original image.
-            results (list): The list of detection results from detect_pucks().
+            results (list): The list of detection results from detect_objects().
 
         Returns:
-            np.ndarray: The image with detections drawn on it.
+            dict: A dictionary mapping class names to lists of object info.
+                  Each list contains dictionaries with 'center' and 'bbox' keys.
         """
-        if not results:
-            return image
-
-        annotated_image = results[0].plot()
-        return annotated_image
-
-    def get_puck_centers(self, results: list):
-        """
-        Extracts the center coordinates of detected pucks and categorizes them by color.
-
-        Args:
-            results (list): The list of detection results from detect_pucks().
-
-        Returns:
-            dict: A dictionary with keys 'blue_pucks' and 'red_pucks'.
-        """
-        puck_centers = {
-            'blue_pucks': [],
-            'red_pucks': []
+        all_objects = {
+            'Red_Pucks': [],
+            'Blue_Pucks': [],
+            'Red_Base': [],
+            'Blue_Base': []
         }
 
         if not results or not results[0].boxes:
-            return puck_centers
+            return all_objects
 
         for box in results[0].boxes:
             class_id = box.cls.item()
@@ -96,12 +86,40 @@ class PuckDetector:
             center_x = int((x_min + x_max) / 2)
             center_y = int((y_min + y_max) / 2)
 
-            if class_name == 'Blue_Pucks':
-                puck_centers['blue_pucks'].append((center_x, center_y))
-            elif class_name == 'Red_Pucks':
-                puck_centers['red_pucks'].append((center_x, center_y))
+            object_info = {
+                'center': (center_x, center_y),
+                'bbox': (x_min, y_min, x_max, y_max)
+            }
 
-        return puck_centers
+            # Use more robust string checking to categorize objects
+            lower_class_name = class_name.lower()
+            if 'blue' in lower_class_name and 'puck' in lower_class_name:
+                all_objects['Blue_Pucks'].append(object_info)
+            elif 'red' in lower_class_name and 'puck' in lower_class_name:
+                all_objects['Red_Pucks'].append(object_info)
+            elif 'blue' in lower_class_name and 'base' in lower_class_name:
+                all_objects['Blue_Base'].append(object_info)
+            elif 'red' in lower_class_name and 'base' in lower_class_name:
+                all_objects['Red_Base'].append(object_info)
+
+        return all_objects
+
+    def draw_detections(self, image: np.ndarray, results: list):
+        """
+        Draws the detected bounding boxes and labels on the image.
+
+        Args:
+            image (np.ndarray): The original image.
+            results (list): The list of detection results from detect_objects().
+
+        Returns:
+            np.ndarray: The image with detections drawn on it.
+        """
+        if not results:
+            return image
+
+        annotated_image = results[0].plot()
+        return annotated_image
 
     def live_demo(self, camera: Camera, delay: int = 10):
         """
@@ -119,22 +137,32 @@ class PuckDetector:
                 if frame is None:
                     break
 
-                results = self.detect_pucks(frame)
-                puck_centers = self.get_puck_centers(results)
+                results = self.detect_objects(frame)
+                object_info = self.get_object_info(results)
 
-                # Annotate image with bounding boxes and puck centers
+                # Annotate image with bounding boxes
                 annotated_image = self.draw_detections(frame, results)
-                for x, y in puck_centers['blue_pucks']:
-                    cv2.circle(annotated_image, (x, y), 5, (255, 0, 0), -1)
-                for x, y in puck_centers['red_pucks']:
-                    cv2.circle(annotated_image, (x, y), 5, (0, 0, 255), -1)
+
+                # Draw center points and print info for all objects
+                for class_name, objects in object_info.items():
+                    color = (0, 0, 0)
+                    if 'Blue' in class_name:
+                        color = (255, 0, 0)  # Blue
+                    elif 'Red' in class_name:
+                        color = (0, 0, 255)  # Red
+
+                    for obj in objects:
+                        x, y = obj['center']
+                        cv2.circle(annotated_image, (x, y), 5, color, -1)
 
                 # Print summary to console
-                print(
-                    f"Blue pucks: {puck_centers['blue_pucks']} | Red pucks: {puck_centers['red_pucks']}")
+                summary_str = " | ".join(
+                    [f"{key}: {[obj['center'] for obj in value]}" for key, value in object_info.items()]
+                )
+                print(summary_str)
 
                 # Display the annotated image
-                cv2.imshow("Puck Detector Live Demo", annotated_image)
+                cv2.imshow("Object Detector Live Demo", annotated_image)
 
                 # Wait for key press; 'q' will break the loop
                 if cv2.waitKey(delay) & 0xFF == ord('q'):

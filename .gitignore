@@ -3,3 +3,5 @@ Pipfile
 Pipfile.lock
 puck_images_resized
 __pycache__/
+sample_photos/
+test.py
